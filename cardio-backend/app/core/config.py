@@ -1,5 +1,4 @@
-from pydantic import BaseSettings
-
+from pydantic_settings import BaseSettings 
 class Settings(BaseSettings):
     MONGO_URI: str
     JWT_SECRET: str

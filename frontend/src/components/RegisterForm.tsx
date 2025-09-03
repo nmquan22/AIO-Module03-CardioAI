@@ -8,19 +8,30 @@ export default function RegisterForm({
   onRegisterSuccess: () => void;
   onGoLogin: () => void;
 }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const res = await register({ username, email, password });
-    if (res?.access_token) {
-      localStorage.setItem("token", res.access_token);
-      alert("✅ Register success!");
-      onRegisterSuccess(); 
-    } else {
-      alert("❌ Register failed!");
+    if (!email || !password) {
+      alert("Vui lòng nhập email và mật khẩu");
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await register({ email, password });
+      if (res?.access_token) {
+        localStorage.setItem("token", res.access_token);
+        alert("Register success!");
+        onRegisterSuccess();
+      } else {
+        alert("Register failed!");
+      }
+    } catch (err: any) {
+      alert(err?.message || "Register error");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -33,13 +44,6 @@ export default function RegisterForm({
         <h2 className="text-2xl font-bold text-center text-gray-700">
           Register
         </h2>
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-green-400 outline-none"
-        />
         <input
           type="email"
           placeholder="Email"
@@ -56,12 +60,12 @@ export default function RegisterForm({
         />
         <button
           type="submit"
-          className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-2 rounded-lg transition"
+          disabled={loading}
+          className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
         >
-          Register
+          {loading ? "Registering..." : "Register"}
         </button>
 
-        {/* Nút quay lại Login */}
         <p className="text-center text-sm text-gray-600">
           Đã có tài khoản?{" "}
           <button

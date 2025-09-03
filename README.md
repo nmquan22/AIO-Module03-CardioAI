@@ -107,15 +107,34 @@ http://localhost:5173
 
 ---
 
-## 🧠 Features
+## 🧠 Machine Learning Pipeline
 
-### 1. ML Predict
-Endpoint:
+### 1. Data Preprocessing
+- Chuẩn hóa dữ liệu xét nghiệm máu (cholesterol, huyết áp, nhịp tim, men gan AST/ALT…).  
+- Xử lý giá trị thiếu (mean/median imputation).  
+- One-hot encoding cho dữ liệu phân loại (giới tính, bệnh sử).  
+- Feature scaling: MinMax hoặc StandardScaler.
+
+### 2. So sánh mô hình Tabular
+| Model               | Ưu điểm                     | Nhược điểm                    | Độ chính xác (AUC) |
+|----------------------|-----------------------------|-------------------------------|--------------------|
+| Logistic Regression  | Dễ triển khai, explainable  | Hiệu năng thấp với dữ liệu phức tạp | 0.78 |
+| Random Forest        | Robust, không cần scale nhiều | Model nặng, chậm              | 0.83 |
+| XGBoost              | Phổ biến, hiệu năng cao     | Dễ overfit nếu data ít         | 0.87 |
+| TabNet               | Deep learning tabular       | Khó train, cần GPU             | 0.85 |
+| FT-Transformer       | Hợp với multimodal fusion   | Cần nhiều data                 | 0.86 |
+
+### 3. Ensemble Strategy
+- Kết hợp **XGBoost + TabNet** để tận dụng điểm mạnh (XGBoost ổn định, TabNet mạnh với multimodal).  
+- Voting ensemble hoặc weighted averaging.  
+
+### 4. Inference
+Endpoint:  
 ```http
 POST /predict
 ```
 
-Body:
+Body ví dụ:
 ```json
 {
   "age": 45,
@@ -135,24 +154,35 @@ Response:
 
 ---
 
-### 2. 3D Reconstruction (Planned)
-- Upload ảnh y tế (CT/MRI).  
-- Backend xử lý → trả mô hình 3D (.glb / .obj).  
-- Frontend render bằng **Three.js**.  
+## 🤖 AI Assistant (Chatbot)
+
+- **Patient Mode**: giải thích kết quả đơn giản, dễ hiểu.  
+- **Doctor Mode**: cung cấp phân tích chuyên sâu (kết hợp ảnh + dữ liệu xét nghiệm).  
+- Công nghệ: **LangChain + RAG + OpenAI API**.  
 
 ---
 
-### 3. AI Assistant (Planned)
-- Chat UI trên frontend.  
-- Kết nối **LLM API** để tư vấn sức khỏe.  
-- Hỗ trợ tri thức y tế nội bộ (RAG).  
+## 📡 IoT Integration
+
+- Mô phỏng thiết bị đo nhịp tim, huyết áp, SpO₂.  
+- Data gửi qua **MQTT** → Backend → Frontend Dashboard.  
+- Hỗ trợ realtime hiển thị biểu đồ sức khỏe.  
 
 ---
 
-### 4. IoT Integration (Planned)
-- Backend lắng nghe **MQTT/WebSocket**.  
-- Nhận dữ liệu từ thiết bị (nhịp tim, huyết áp,...).  
-- Frontend hiển thị realtime dashboard.  
+## 🔮 Future Work
+
+1. **Chatbot mở rộng**:  
+   - Không chỉ dựa vào dữ liệu bảng (lab test), mà còn dự đoán bệnh dựa trên triệu chứng bệnh nhân nhập vào (tương tự module 01).  
+   - Thêm **dashboard AI Symptom Checker**: bệnh nhân nhập triệu chứng → chatbot + ML dự đoán khả năng mắc bệnh.  
+
+2. **3D Medical Visualization**:  
+   - Dựng ảnh 3D từ nhiều lát cắt 2D (NeRF hoặc GAN-based reconstruction).  
+   - Heatmap highlight vùng tổn thương.  
+
+3. **Edge Deployment**:  
+   - Nén mô hình (Knowledge Distillation, Quantization).  
+   - Deploy lên thiết bị y tế/IoT thật.  
 
 ---
 
@@ -164,6 +194,7 @@ Response:
 - [ ] 3D Reconstruction pipeline.  
 - [ ] AI Assistant (Chatbot).  
 - [ ] IoT Realtime Dashboard.  
+- [ ] AI Symptom Checker (Future Work).  
 - [ ] Unit Tests & CI/CD.  
 
 ---

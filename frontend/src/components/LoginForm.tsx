@@ -8,18 +8,30 @@ export default function LoginForm({
   onLoginSuccess: () => void;
   onGoRegister: () => void;
 }) {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const res = await login(username, password);
-    if (res?.access_token) {
-      localStorage.setItem("token", res.access_token);
-      alert("✅ Login success!");
-      onLoginSuccess(); // 👉 báo cho App biết login thành công
-    } else {
-      alert("❌ Login failed!");
+    if (!email || !password) {
+      alert("Vui lòng nhập email và mật khẩu");
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await login(email, password);
+      if (res?.access_token) {
+        localStorage.setItem("token", res.access_token);
+        alert("Login success!");
+        onLoginSuccess();
+      } else {
+        alert("Login failed!");
+      }
+    } catch (err: any) {
+      alert(err?.message || "Login error");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -31,10 +43,10 @@ export default function LoginForm({
       >
         <h2 className="text-2xl font-bold text-center text-gray-700">Login</h2>
         <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-400 outline-none"
         />
         <input
@@ -46,12 +58,12 @@ export default function LoginForm({
         />
         <button
           type="submit"
-          className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg transition"
+          disabled={loading}
+          className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
         >
-          Login
+          {loading ? "Logging in..." : "Login"}
         </button>
 
-        {/* Nút chuyển sang Register */}
         <p className="text-center text-sm text-gray-600">
           Chưa có tài khoản?{" "}
           <button
