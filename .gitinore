@@ -1,0 +1,4 @@
+# .gitignore
+
+# ... (các dòng khác)
+backend/.env

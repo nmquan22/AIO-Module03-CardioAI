@@ -1,0 +1,31 @@
+# Docker Compose phiên bản mới không còn yêu cầu thuộc tính version nữa.
+
+services:
+  # Dịch vụ backend chạy API FastAPI
+  backend_app:
+    # Build context: Chỉ lấy mã nguồn từ thư mục cardio-backend
+    build:
+      context: ./cardio-backend
+      dockerfile: Dockerfile
+    image: cardioai-backend-img:latest
+    container_name: cardio-api-container
+    # Command: Trỏ đúng vào file main.py bên trong cardio-backend/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env
+
+  # Dịch vụ frontend chạy giao diện Streamlit
+  frontend_app:
+    # Build context: Lấy mã nguồn từ thư mục gốc (vì app.py ở đó)
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cardioai-frontend-img:latest
+    container_name: cardio-ui-container
+    command: python -m streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend_app
