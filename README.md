@@ -128,29 +128,117 @@ http://localhost:5173
 - Kết hợp **XGBoost + TabNet** để tận dụng điểm mạnh (XGBoost ổn định, TabNet mạnh với multimodal).  
 - Voting ensemble hoặc weighted averaging.  
 
-### 4. Inference
-Endpoint:  
+## 🧠 ML API
+
+### Endpoints (group: `/ml`)
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/ml/feature_names` | Raw feature order used by the preprocessor (debug) |
+| `GET` | `/ml/feature_labels` | Mapping from transformed names to human‑friendly labels |
+| `GET` | `/ml/model_info` | Quick model info (steps, transformed feature names) |
+| `GET` | `/ml/versions` | Python/Sklearn/XGBoost versions in server |
+| `GET` | `/ml/debug_pipeline` | Inspect ColumnTransformer structure |
+| `POST` | `/ml/predict` | Predict with fully required schema (strict validation) |
+| `POST` | `/ml/predict_full` | Predict with all fields **optional**, null→NaN (recommended) |
+| `POST` | `/ml/predict_simple` | Minimal input (age years, gender, ap_hi, …) for demos |
+| `POST` | `/ml/explain_full` | SHAP explanation for `/predict_full` payload |
+| `POST` | `/ml/reload` | Upload a new pipeline `.pkl` and hot‑reload |
+
+### Request example (predict_full)
 ```http
-POST /predict
+POST /ml/predict_full
+Content-Type: application/json
 ```
-
-Body ví dụ:
 ```json
 {
-  "age": 45,
-  "sex": 1,
-  "chol": 240,
-  "trestbps": 130
+  "age": 16225,
+  "height": 170,
+  "weight": 68,
+  "ap_hi": 120,
+  "ap_lo": 80,
+  "cholesterol": 2,
+  "gluc": 1,
+  "smoke": 0,
+  "alco": 0,
+  "active": 1,
+  "gender": 2
 }
 ```
 
-Response:
+### Response example
+```json
+{ "prediction": 0, "prob": 0.212 }
+```
+
+### SHAP explanation
+```http
+POST /ml/explain_full
+```
+Response (truncated):
 ```json
 {
-  "prediction": "Positive",
-  "confidence": 0.87
+  "prediction": 0,
+  "prob": 0.212,
+  "base_value": -0.016,
+  "base_prob": 0.496,
+  "top_up": [{"feature":"Glucose=3","value":0.014}, ...],
+  "top_down": [{"feature":"Systolic BP","value":-0.666}, ...],
+  "contributions": [...],
+  "note": "SHAP > 0: tăng xác suất class=1 (nguy cơ cao); SHAP < 0: giảm."
 }
 ```
+
+---
+
+## 🔁 Logging & Dashboard
+
+Every `/ml/predict_full` call is inserted into MongoDB:
+
+```py
+# app/ml/models/prediction_log.py
+class PredictionLog(Document):
+    user_id: Optional[str]
+    model_name: str
+    prediction: int
+    prob: Optional[float]
+    inputs: InputSnapshot             # raw inputs (days, cm, kg, ...)
+    derived: Dict[str, Any]           # age_years, bmi, bp_diff, gender_bin
+    shap_top_up: Optional[list] = None
+    shap_top_down: Optional[list] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+```
+
+### Dashboard endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/ml/history?limit=50` | Recent logs for the current tenant/user |
+| `GET` | `/ml/stats` | Quick stats (total, positives, avg prob, last ts) |
+
+### Frontend Dashboard
+
+- **Line chart**: probability over time (Recharts).
+- **Quick stats**: total/positives/avg prob/last time.
+- **Recent table**: time, pred, prob, systolic, age (yrs), BMI.
+- **Coach tips (rule‑based)**: simple lifestyle hints if rising trend / high BMI / high glucose or cholesterol.
+
+---
+
+## 🔧 Model Reload
+
+Upload a compatible `.pkl` (Sklearn `Pipeline(pre, clf)` with `ColumnTransformer` named `"pre"`):
+
+```bash
+curl -F "file=@/path/to/cardio_model.pkl" http://localhost:8000/ml/reload
+```
+
+The server verifies:
+- Pipeline type, presence of `pre` (ColumnTransformer)
+- Only `"passthrough"`/`"drop"` are allowed as string transformers
+- Caches a new SHAP `TreeExplainer` (cache cleared after reload)
+
+---
 
 ---
 
