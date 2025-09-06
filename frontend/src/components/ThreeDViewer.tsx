@@ -47,7 +47,7 @@ class ErrorBoundary extends React.Component<
 function Loading() {
   return (
     <Html center>
-      <div className="px-4 py-2 bg-white rounded shadow text-gray-600">
+      <div className="px-4 py-2 bg-white rounded shadow text-gray-600 text-sm">
         Đang tải mô hình...
       </div>
     </Html>
@@ -100,7 +100,6 @@ function Model({
 
   if (ext === "gltf" || ext === "glb") {
     const gltf = useLoader(GLTFLoader, url);
-
     useEffect(() => {
       gltf.scene.traverse((child: any) => {
         if (child.isMesh && child.material) {
@@ -110,7 +109,6 @@ function Model({
         }
       });
     }, [gltf, clippingPlanes, wireframe]);
-
     return <primitive object={gltf.scene} />;
   }
 
@@ -196,10 +194,8 @@ export default function ThreeDViewer() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const fileExt = file.name.split(".").pop()?.toLowerCase();
     if (!fileExt) return;
-
     const objectUrl = URL.createObjectURL(file);
     setUrl(objectUrl);
     setExt(fileExt);
@@ -212,39 +208,57 @@ export default function ThreeDViewer() {
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow h-full flex flex-col">
-      <h2 className="text-2xl font-bold mb-4">3D Reconstruction Viewer</h2>
+    <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-6xl mx-auto flex flex-col space-y-6">
+      <h2 className="text-2xl font-bold">3D Reconstruction Viewer</h2>
 
-      <div className="flex items-center gap-4 mb-4 flex-wrap">
-        <input
-          type="file"
-          accept=".glb,.gltf,.obj,.stl,.fbx"
-          onChange={handleFileUpload}
-        />
+      {/* Hướng dẫn sử dụng */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700 leading-relaxed">
+        <h3 className="font-semibold mb-2">📘 Hướng dẫn chuẩn bị dữ liệu (3D Slicer)</h3>
+        <ol className="list-decimal list-inside space-y-1">
+          <li>Cài đặt phần mềm <b>3D Slicer</b> (miễn phí, open-source).</li>
+          <li>Mở Slicer → Import dữ liệu CT/MRI (file DICOM).</li>
+          <li>Dùng <b>Segment Editor</b> để chọn vùng tim/mạch máu.</li>
+          <li>Làm mịn (Smooth) và loại bỏ nhiễu.</li>
+          <li><b>Export</b> ra <code>.stl</code>, <code>.obj</code>, <code>.glb</code>, hoặc <code>.fbx</code>.</li>
+          <li>Tải file lên đây để xem mô hình 3D.</li>
+        </ol>
+      </div>
+
+      {/* Control panel */}
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="px-3 py-2 border rounded cursor-pointer text-sm text-gray-700 bg-gray-50 hover:bg-gray-100">
+          Chọn tệp 3D
+          <input
+            type="file"
+            accept=".glb,.gltf,.obj,.stl,.fbx"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+        </label>
         <button
-          className="px-3 py-1 bg-blue-500 text-white rounded"
+          className="px-3 py-1 bg-blue-500 text-white rounded text-sm"
           onClick={() => setWireframe((w) => !w)}
         >
           {wireframe ? "Tắt Wireframe" : "Bật Wireframe"}
         </button>
         <button
-          className="px-3 py-1 bg-green-500 text-white rounded"
+          className="px-3 py-1 bg-green-500 text-white rounded text-sm"
           onClick={() => setAutoRotate((r) => !r)}
         >
           {autoRotate ? "Tắt Auto-Rotate" : "Bật Auto-Rotate"}
         </button>
         <button
-          className="px-3 py-1 bg-red-500 text-white rounded"
+          className="px-3 py-1 bg-red-500 text-white rounded text-sm"
           onClick={resetClipping}
         >
           Reset Clipping
         </button>
       </div>
 
-      {/* Sliders for clipping planes */}
-      <div className="mb-4 space-y-2">
-        <label className="block">
-          Clip X: {clipX.toFixed(2)}
+      {/* Sliders */}
+      <div className="grid grid-cols-3 gap-4 text-sm">
+        <label className="flex flex-col items-center">
+          X: {clipX.toFixed(1)}
           <input
             type="range"
             min={-5}
@@ -252,11 +266,11 @@ export default function ThreeDViewer() {
             step={0.1}
             value={clipX}
             onChange={(e) => setClipX(parseFloat(e.target.value))}
-            className="w-full"
+            className="w-24"
           />
         </label>
-        <label className="block">
-          Clip Y: {clipY.toFixed(2)}
+        <label className="flex flex-col items-center">
+          Y: {clipY.toFixed(1)}
           <input
             type="range"
             min={-5}
@@ -264,11 +278,11 @@ export default function ThreeDViewer() {
             step={0.1}
             value={clipY}
             onChange={(e) => setClipY(parseFloat(e.target.value))}
-            className="w-full"
+            className="w-24"
           />
         </label>
-        <label className="block">
-          Clip Z: {clipZ.toFixed(2)}
+        <label className="flex flex-col items-center">
+          Z: {clipZ.toFixed(1)}
           <input
             type="range"
             min={-5}
@@ -276,12 +290,13 @@ export default function ThreeDViewer() {
             step={0.1}
             value={clipZ}
             onChange={(e) => setClipZ(parseFloat(e.target.value))}
-            className="w-full"
+            className="w-24"
           />
         </label>
       </div>
 
-      <div className="flex-1">
+      {/* Viewer box */}
+      <div className="w-full h-[500px] border rounded-lg overflow-hidden bg-gray-100">
         <ErrorBoundary>
           <Canvas
             shadows
@@ -310,3 +325,4 @@ export default function ThreeDViewer() {
     </div>
   );
 }
+
