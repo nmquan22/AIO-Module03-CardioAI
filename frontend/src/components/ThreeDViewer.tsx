@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState, Suspense } from "react";
 import { Canvas, useFrame, useThree, useLoader } from "@react-three/fiber";
-import { OrbitControls, Environment, Html, Bounds, useBounds } from "@react-three/drei";
+import {
+  OrbitControls,
+  Environment,
+  Html,
+  Bounds,
+  useBounds,
+} from "@react-three/drei";
 import { GLTFLoader } from "three-stdlib";
 import { OBJLoader } from "three-stdlib";
 import { STLLoader } from "three-stdlib";
@@ -31,7 +37,9 @@ function CenterAndFit({ children }: { children: React.ReactNode }) {
 function Loading() {
   return (
     <Html center>
-      <div className="px-3 py-1 text-sm bg-white/90 rounded-lg shadow">Đang tải mô hình…</div>
+      <div className="px-3 py-1 text-sm bg-white/90 rounded-lg shadow">
+        Đang tải mô hình…
+      </div>
     </Html>
   );
 }
@@ -45,12 +53,28 @@ function FallbackCube({ wireframe }: { wireframe: boolean }) {
   );
 }
 
-function Model({ url, ext, wireframe }: { url: string | null; ext: string | null; wireframe: boolean }) {
+function Model({
+  url,
+  ext,
+  wireframe,
+  clippingPlanes,
+}: {
+  url: string | null;
+  ext: string | null;
+  wireframe: boolean;
+  clippingPlanes: THREE.Plane[];
+}) {
   if (!url || !ext) return <FallbackCube wireframe={wireframe} />;
 
   if (ext === "gltf" || ext === "glb") {
     const gltf = useLoader(GLTFLoader, url);
-    return <primitive object={gltf.scene} />;
+    return (
+      <primitive
+        object={gltf.scene}
+        material-clippingPlanes={clippingPlanes}
+        material-clipShadows
+      />
+    );
   }
 
   if (ext === "obj") {
@@ -62,7 +86,11 @@ function Model({ url, ext, wireframe }: { url: string | null; ext: string | null
     const geom = useLoader(STLLoader, url);
     return (
       <mesh geometry={geom} castShadow receiveShadow>
-        <meshStandardMaterial wireframe={wireframe} />
+        <meshStandardMaterial
+          wireframe={wireframe}
+          clippingPlanes={clippingPlanes}
+          clipShadows
+        />
       </mesh>
     );
   }
@@ -91,6 +119,58 @@ function AutoRotate({ enabled }: { enabled: boolean }) {
 }
 
 // ----------------------
+// Measurement helper
+// ----------------------
+function MeasurementTool({ enabled }: { enabled: boolean }) {
+  const [points, setPoints] = useState<THREE.Vector3[]>([]);
+  const [distance, setDistance] = useState<number | null>(null);
+
+  const handleClick = (e: any) => {
+    if (!enabled) return;
+    e.stopPropagation();
+    const p = e.point.clone();
+    setPoints((prev) => {
+      const newPoints = [...prev, p];
+      if (newPoints.length === 2) {
+        const d = newPoints[0].distanceTo(newPoints[1]);
+        setDistance(d);
+      }
+      return newPoints.slice(-2);
+    });
+  };
+
+  return (
+    <group onClick={handleClick}>
+      {points.map((p, i) => (
+        <mesh key={i} position={p}>
+          <sphereGeometry args={[0.05, 16, 16]} />
+          <meshBasicMaterial color="red" />
+        </mesh>
+      ))}
+      {points.length === 2 && (
+        <>
+          <line>
+            <bufferGeometry
+              attach="geometry"
+              setFromPoints={new THREE.BufferGeometry().setFromPoints(points)}
+            />
+            <lineBasicMaterial color="red" />
+          </line>
+          {distance && (
+            <Html center position={points[1]}>
+              <div className="px-2 py-1 bg-white text-xs rounded shadow">
+                {distance.toFixed(2)} mm
+              </div>
+            </Html>
+          )}
+        </>
+      )}
+    </group>
+  );
+}
+
+
+// ----------------------
 // Main Component
 // ----------------------
 export default function ThreeDViewer() {
@@ -98,6 +178,8 @@ export default function ThreeDViewer() {
   const [wireframe, setWireframe] = useState<boolean>(false);
   const [autoRotate, setAutoRotate] = useState<boolean>(false);
   const [bg, setBg] = useState<string>("#f8fafc");
+  const [clipping, setClipping] = useState<boolean>(false);
+  const [measure, setMeasure] = useState<boolean>(false);
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
@@ -105,15 +187,29 @@ export default function ThreeDViewer() {
   };
 
   const url = useObjectURL(file);
-  const ext = useMemo(() => (file ? file.name.split(".").pop()?.toLowerCase() || null : null), [file]);
+  const ext = useMemo(
+    () => (file ? file.name.split(".").pop()?.toLowerCase() || null : null),
+    [file]
+  );
+
+  // Define a clipping plane (Y axis for example)
+  const clippingPlanes = useMemo(
+    () => (clipping ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), 0)] : []),
+    [clipping]
+  );
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow h-full flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">3D Reconstruction</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <label className="px-3 py-2 rounded-xl border cursor-pointer hover:shadow transition">
-            <input type="file" accept=".glb,.gltf,.obj,.stl" className="hidden" onChange={onFileChange} />
+            <input
+              type="file"
+              accept=".glb,.gltf,.obj,.stl"
+              className="hidden"
+              onChange={onFileChange}
+            />
             Tải mô hình (.glb/.gltf/.obj/.stl)
           </label>
           <button
@@ -127,6 +223,20 @@ export default function ThreeDViewer() {
             className="px-3 py-2 rounded-xl border hover:shadow"
           >
             {autoRotate ? "Dừng xoay" : "Tự xoay"}
+          </button>
+          <button
+            onClick={() => setClipping((v) => !v)}
+            className="px-3 py-2 rounded-xl border hover:shadow"
+          >
+            {clipping ? "Tắt cắt lớp" : "Cắt lớp"}
+          </button>
+          <button
+            onClick={() => setMeasure((v) => !v)}
+            className={`px-3 py-2 rounded-xl border hover:shadow ${
+              measure ? "bg-blue-100" : ""
+            }`}
+          >
+            {measure ? "Thoát đo" : "Đo khoảng cách"}
           </button>
           <select
             className="px-3 py-2 rounded-xl border"
@@ -143,19 +253,29 @@ export default function ThreeDViewer() {
       </div>
 
       <p className="text-gray-600 -mt-2">
-        Tải mô hình siêu âm/CT/MRI đã được chuyển sang lưới 3D (STL/OBJ/GLTF). Với dữ liệu thể tích (DICOM), cần một bước dựng thể tích riêng.
+        Tải mô hình siêu âm/CT/MRI đã được chuyển sang lưới 3D (STL/OBJ/GLTF).
+        Có thể cắt lớp, đo khoảng cách để hỗ trợ phân tích chỉ số tim mạch.
       </p>
 
-      <div className="relative w-full aspect-square rounded-2xl overflow-hidden border" style={{ background: bg }}>
+      <div
+        className="relative w-full aspect-square rounded-2xl overflow-hidden border"
+        style={{ background: bg }}
+      >
         <Canvas shadows camera={{ position: [4, 4, 6], fov: 45 }}>
-          <Suspense fallback={<Loading />}> 
+          <Suspense fallback={<Loading />}>
             <Environment preset="city" />
             <Lights />
             <Bounds clip fit observe margin={1.2}>
               <CenterAndFit>
-                <Model url={url} ext={ext} wireframe={wireframe} />
+                <Model
+                  url={url}
+                  ext={ext}
+                  wireframe={wireframe}
+                  clippingPlanes={clippingPlanes}
+                />
               </CenterAndFit>
             </Bounds>
+            <MeasurementTool enabled={measure} />
           </Suspense>
           <gridHelper args={[20, 20]} />
           <OrbitControls makeDefault />
@@ -164,10 +284,13 @@ export default function ThreeDViewer() {
       </div>
 
       <div className="text-xs text-gray-500">
-        Gợi ý: Dùng <span className="font-mono">3D Slicer</span> hoặc <span className="font-mono">ITK-Snap</span> để trích lưới STL/OBJ từ DICOM trước khi tải lên.
+        Gợi ý: Dùng <span className="font-mono">3D Slicer</span> hoặc{" "}
+        <span className="font-mono">ITK-Snap</span> để trích lưới STL/OBJ từ
+        DICOM trước khi tải lên.
       </div>
     </div>
   );
 }
+
 
 
