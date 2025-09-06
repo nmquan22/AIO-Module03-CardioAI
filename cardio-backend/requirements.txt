@@ -9,6 +9,13 @@ python-jose==3.3.0
 passlib[bcrypt]==1.7.4
 motor==3.5.1
 pymongo==4.8.0
+paho-mqtt==1.6.1
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.2.2
+xgboost==2.0.3
+joblib==1.4.2
+python-multipart==0.0.9
 google-generativeai
 requests
 streamlit
