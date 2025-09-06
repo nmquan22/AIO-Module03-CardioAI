@@ -41,3 +41,30 @@ export async function predictFull(data: PredictFullInput): Promise<PredictRespon
   const res = await axios.post(`${base}/ml/predict_full`, data, { timeout: 15000 });
   return res.data as PredictResponse;
 }
+
+// ---------- Explain types ----------
+export type ShapItem = { feature: string; value: number };
+
+export type ExplainResponse = {
+  prediction: 0 | 1;
+  prob?: number | null;
+  base_value: number;   // logit
+  base_prob: number;    // sigmoid(base_value)
+  top_up: ShapItem[];
+  top_down: ShapItem[];
+  contributions: ShapItem[];
+  note?: string;
+};
+
+export async function explainFull(data: PredictFullInput): Promise<ExplainResponse> {
+  const base = String(API_BASE).replace(/\/+$/, "");
+  const res = await axios.post(`${base}/ml/explain_full`, data, { timeout: 20000 });
+  return res.data as ExplainResponse;
+}
+
+export async function fetchFeatureLabels(): Promise<Record<string,string>> {
+  const base = String(API_BASE).replace(/\/+$/, "");
+  const res = await axios.get(`${base}/ml/feature_labels`, { timeout: 10000 });
+  return res.data as Record<string,string>;
+}
+

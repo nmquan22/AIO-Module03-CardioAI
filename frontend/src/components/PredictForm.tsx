@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { predictFull } from "../api/predict";
+import { predictFull, explainFull, type PredictResponse } from "../api/predict";
+import ExplainPanel from "./ExplainPanel";
 
 function toNumOrNull(v: string): number | null {
   if (v === "" || v === null || v === undefined) return null;
@@ -22,6 +23,8 @@ export default function PredictForm() {
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [explain, setExplain] = useState<any | null>(null);
+
 
   const payload = useMemo(() => {
     const years = toNumOrNull(ageYears);
@@ -42,12 +45,16 @@ export default function PredictForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true); setResult(null);
+    setLoading(true); setResult(null); setExplain(null);
     try {
       const res = await predictFull(payload);
       const label = res.prediction === 1 ? "High risk (1)" : "Low risk (0)";
       const probText = typeof res.prob === "number" ? ` — probability: ${(res.prob*100).toFixed(1)}%` : "";
       setResult(`${label}${probText}`);
+
+      // gọi explain
+      const ex = await explainFull(payload);
+      setExplain(ex);
     } catch (err: any) {
       const msg = err?.response?.data?.detail ?? err?.message ?? "Prediction failed";
       setResult("❌ " + String(msg));
@@ -91,6 +98,8 @@ export default function PredictForm() {
         </button>
 
         {result && <div className="mt-2 text-center font-semibold text-gray-700">{result}</div>}
+        {explain && <ExplainPanel data={explain} />}
+
 
         <p className="text-xs text-gray-500">
           Trường trống sẽ được gửi là <code>null</code> → server chuyển thành <code>NaN</code> cho XGBoost xử lý.
