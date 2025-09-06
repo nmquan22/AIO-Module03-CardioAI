@@ -6,7 +6,6 @@ import {
   Bounds,
   useBounds,
   Html,
-  Stats,
   Grid,
   ContactShadows,
 } from "@react-three/drei";
@@ -20,15 +19,8 @@ import {
   RotateCcw, 
   Eye, 
   EyeOff, 
-  Grid3X3, 
-  Sun, 
-  Moon,
-  Camera,
-  Download,
-  Settings,
+  Grid3X3,
   Info,
-  Maximize,
-  Minimize,
   Play,
   Pause,
   Sliders
@@ -101,6 +93,13 @@ function Lights({ lightIntensity }: { lightIntensity: number }) {
         shadow-camera-bottom={-10}
       />
       <pointLight position={[-10, -10, -10]} intensity={lightIntensity * 0.3} />
+      <spotLight
+        position={[0, 20, 0]}
+        intensity={lightIntensity * 0.5}
+        angle={0.6}
+        penumbra={1}
+        castShadow
+      />
     </>
   );
 }
@@ -133,6 +132,8 @@ function DemoHeart({ wireframe, clippingPlanes }: { wireframe: boolean; clipping
           clipShadows
           transparent
           opacity={0.9}
+          roughness={0.3}
+          metalness={0.1}
         />
       </mesh>
       
@@ -149,6 +150,8 @@ function DemoHeart({ wireframe, clippingPlanes }: { wireframe: boolean; clipping
             wireframe={wireframe}
             clippingPlanes={clippingPlanes}
             clipShadows
+            roughness={0.4}
+            metalness={0.05}
           />
         </mesh>
       ))}
@@ -163,6 +166,8 @@ function DemoHeart({ wireframe, clippingPlanes }: { wireframe: boolean; clipping
           clipShadows
           transparent
           opacity={0.7}
+          roughness={0.2}
+          metalness={0.15}
         />
       </mesh>
     </group>
@@ -200,6 +205,8 @@ function Model({
             mat.color = new THREE.Color(modelColor);
             mat.transparent = true;
             mat.opacity = modelOpacity;
+            mat.roughness = 0.3;
+            mat.metalness = 0.1;
           });
         } else {
           child.material.clippingPlanes = clippingPlanes;
@@ -208,6 +215,8 @@ function Model({
           child.material.color = new THREE.Color(modelColor);
           child.material.transparent = true;
           child.material.opacity = modelOpacity;
+          child.material.roughness = 0.3;
+          child.material.metalness = 0.1;
         }
       }
     });
@@ -240,6 +249,8 @@ function Model({
           color={modelColor}
           transparent
           opacity={modelOpacity}
+          roughness={0.3}
+          metalness={0.1}
         />
       </mesh>
     );
@@ -280,13 +291,10 @@ export default function ThreeDViewer() {
   const [ext, setExt] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
   
-  // Visual settings
+  // Visual settings - fixed, no toggle
   const [wireframe, setWireframe] = useState(false);
   const [autoRotate, setAutoRotate] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
-  const [showStats, setShowStats] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Model settings
   const [lightIntensity, setLightIntensity] = useState(1);
@@ -298,9 +306,6 @@ export default function ThreeDViewer() {
   const [clipX, setClipX] = useState(0);
   const [clipY, setClipY] = useState(0);
   const [clipZ, setClipZ] = useState(0);
-  
-  // UI state
-  const [showControlPanel, setShowControlPanel] = useState(true);
 
   // Generate clipping planes
   const clippingPlanes = [
@@ -334,210 +339,217 @@ export default function ThreeDViewer() {
     setAutoRotate(false);
   };
 
-  const takeScreenshot = () => {
-    // This would need to be implemented with canvas export
-    alert("Tính năng chụp ảnh sẽ được thêm trong phiên bản tiếp theo!");
-  };
-
   return (
-    <div className={`${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'} transition-colors duration-300 ${isFullscreen ? 'fixed inset-0 z-50' : 'p-6'}`}>
-      <div className={`${isFullscreen ? 'h-full' : 'max-w-7xl mx-auto'} flex flex-col space-y-6`}>
+    <div className="bg-gray-50 text-gray-900 min-h-screen p-6">
+      <div className="max-w-7xl mx-auto flex flex-col space-y-6">
         
-        {/* Header */}
-        <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg p-4`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  <Eye className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold">3D Medical Viewer</h1>
-                  <p className="text-sm opacity-60">
-                    {fileName || "Mô hình tim demo - Tải file lên để xem mô hình của bạn"}
-                  </p>
-                </div>
-              </div>
+        {/* Simple Header - No buttons */}
+        <div className="bg-white rounded-xl shadow-lg p-4">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <Eye className="w-4 h-4 text-white" />
             </div>
-            
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className={`p-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
-              >
-                {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
-              
-              <button
-                onClick={() => setShowControlPanel(!showControlPanel)}
-                className={`p-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-              
-              <button
-                onClick={() => setIsFullscreen(!isFullscreen)}
-                className={`p-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
-              >
-                {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-              </button>
+            <div>
+              <h1 className="text-xl font-bold">3D Medical Viewer</h1>
+              <p className="text-sm opacity-60">
+                {fileName || "Mô hình tim demo - Tải file lên để xem mô hình của bạn"}
+              </p>
             </div>
           </div>
         </div>
 
         <div className="flex gap-6 flex-1">
-          {/* Control Panel */}
-          {showControlPanel && (
-            <div className={`w-80 space-y-4 ${isFullscreen ? 'h-full overflow-y-auto' : ''}`}>
-              
-              {/* File Upload */}
-              <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-lg p-4`}>
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <Upload className="w-4 h-4" />
-                  Tải file 3D
-                </h3>
-                <label className={`block w-full p-3 border-2 border-dashed rounded-lg cursor-pointer text-center hover:border-blue-500 transition-colors ${darkMode ? 'border-gray-600 hover:border-blue-400' : 'border-gray-300'}`}>
-                  <input
-                    type="file"
-                    accept=".glb,.gltf,.obj,.stl,.fbx"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <div className="space-y-1">
-                    <Upload className="w-6 h-6 mx-auto opacity-50" />
-                    <div className="text-sm">Chọn file 3D</div>
-                    <div className="text-xs opacity-50">STL, OBJ, GLB, GLTF, FBX</div>
-                  </div>
-                </label>
-              </div>
-
-              {/* Quick Controls */}
-              <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-lg p-4`}>
-                <h3 className="font-semibold mb-3">Điều khiển nhanh</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setWireframe(!wireframe)}
-                    className={`p-2 rounded text-sm ${wireframe ? 'bg-blue-500 text-white' : (darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200')}`}
-                  >
-                    {wireframe ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                  
-                  <button
-                    onClick={() => setAutoRotate(!autoRotate)}
-                    className={`p-2 rounded text-sm ${autoRotate ? 'bg-green-500 text-white' : (darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200')}`}
-                  >
-                    {autoRotate ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                  </button>
-                  
-                  <button
-                    onClick={() => setShowGrid(!showGrid)}
-                    className={`p-2 rounded text-sm ${showGrid ? 'bg-purple-500 text-white' : (darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200')}`}
-                  >
-                    <Grid3X3 className="w-4 h-4" />
-                  </button>
-                  
-                  <button
-                    onClick={resetAll}
-                    className={`p-2 rounded text-sm ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                  </button>
+          {/* Control Panel - Always visible */}
+          <div className="w-80 space-y-4">
+            
+            {/* File Upload */}
+            <div className="bg-white rounded-lg shadow-lg p-4">
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                Tải file 3D
+              </h3>
+              <label className="block w-full p-3 border-2 border-dashed rounded-lg cursor-pointer text-center hover:border-blue-500 transition-colors border-gray-300">
+                <input
+                  type="file"
+                  accept=".glb,.gltf,.obj,.stl,.fbx"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <div className="space-y-1">
+                  <Upload className="w-6 h-6 mx-auto opacity-50" />
+                  <div className="text-sm">Chọn file 3D</div>
+                  <div className="text-xs opacity-50">STL, OBJ, GLB, GLTF, FBX</div>
                 </div>
-              </div>
-
-              {/* Model Appearance */}
-              <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-lg p-4`}>
-                <h3 className="font-semibold mb-3">Giao diện mô hình</h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm mb-1">Màu sắc</label>
-                    <input
-                      type="color"
-                      value={modelColor}
-                      onChange={(e) => setModelColor(e.target.value)}
-                      className="w-full h-8 rounded"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm mb-1">Độ trong suốt: {modelOpacity.toFixed(1)}</label>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="1"
-                      step="0.1"
-                      value={modelOpacity}
-                      onChange={(e) => setModelOpacity(parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm mb-1">Cường độ ánh sáng: {lightIntensity.toFixed(1)}</label>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="3"
-                      step="0.1"
-                      value={lightIntensity}
-                      onChange={(e) => setLightIntensity(parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Clipping Controls */}
-              <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-lg p-4`}>
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <Sliders className="w-4 h-4" />
-                  Cắt lát mô hình
-                </h3>
-                <div className="space-y-3">
-                  {[
-                    { axis: 'X', value: clipX, setter: setClipX, color: 'text-red-500' },
-                    { axis: 'Y', value: clipY, setter: setClipY, color: 'text-green-500' },
-                    { axis: 'Z', value: clipZ, setter: setClipZ, color: 'text-blue-500' }
-                  ].map(({ axis, value, setter, color }) => (
-                    <div key={axis}>
-                      <label className={`block text-sm mb-1 ${color} font-medium`}>
-                        {axis}: {value.toFixed(1)}
-                      </label>
-                      <input
-                        type="range"
-                        min={-20}
-                        max={20}
-                        step={0.1}
-                        value={value}
-                        onChange={(e) => setter(parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Instructions */}
-              <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-blue-50 border-blue-200'} border rounded-lg p-4`}>
-                <h3 className="font-semibold mb-2 flex items-center gap-2">
-                  <Info className="w-4 h-4" />
-                  Hướng dẫn sử dụng
-                </h3>
-                <div className="text-sm space-y-1 opacity-80">
-                  <p>• Kéo chuột: Xoay mô hình</p>
-                  <p>• Cuộn chuột: Zoom in/out</p>
-                  <p>• Chuột phải: Pan (di chuyển)</p>
-                  <p>• Click mô hình: Fit to screen</p>
-                </div>
-              </div>
-
+              </label>
             </div>
-          )}
+
+            {/* Quick Controls */}
+            <div className="bg-white rounded-lg shadow-lg p-4">
+              <h3 className="font-semibold mb-3">Điều khiển nhanh</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setWireframe(!wireframe)}
+                  className={`p-3 rounded-lg text-sm transition-all flex items-center justify-center gap-1 ${wireframe ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200'}`}
+                  title="Chế độ wireframe"
+                >
+                  {wireframe ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <span>{wireframe ? 'Wire' : 'Solid'}</span>
+                </button>
+                
+                <button
+                  onClick={() => setAutoRotate(!autoRotate)}
+                  className={`p-3 rounded-lg text-sm transition-all flex items-center justify-center gap-1 ${autoRotate ? 'bg-green-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200'}`}
+                  title="Tự động xoay"
+                >
+                  {autoRotate ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  <span>{autoRotate ? 'Stop' : 'Rotate'}</span>
+                </button>
+                
+                <button
+                  onClick={() => setShowGrid(!showGrid)}
+                  className={`p-3 rounded-lg text-sm transition-all flex items-center justify-center gap-1 ${showGrid ? 'bg-purple-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200'}`}
+                  title="Hiển thị lưới"
+                >
+                  <Grid3X3 className="w-4 h-4" />
+                  <span>Grid</span>
+                </button>
+                
+                <button
+                  onClick={resetAll}
+                  className="p-3 rounded-lg text-sm transition-all flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200"
+                  title="Đặt lại tất cả"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Reset</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Model Appearance */}
+            <div className="bg-white rounded-lg shadow-lg p-4">
+              <h3 className="font-semibold mb-3">Giao diện mô hình</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm mb-2 font-medium">Màu sắc</label>
+                  <input
+                    type="color"
+                    value={modelColor}
+                    onChange={(e) => setModelColor(e.target.value)}
+                    className="w-full h-10 rounded-lg cursor-pointer"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm mb-2 font-medium">
+                    Độ trong suốt: <span className="text-blue-500">{modelOpacity.toFixed(1)}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1"
+                    step="0.1"
+                    value={modelOpacity}
+                    onChange={(e) => setModelOpacity(parseFloat(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm mb-2 font-medium">
+                    Cường độ ánh sáng: <span className="text-yellow-500">{lightIntensity.toFixed(1)}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="3"
+                    step="0.1"
+                    value={lightIntensity}
+                    onChange={(e) => setLightIntensity(parseFloat(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-2 font-medium">
+                    Tốc độ xoay: <span className="text-green-500">{rotationSpeed.toFixed(1)}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="5"
+                    step="0.1"
+                    value={rotationSpeed}
+                    onChange={(e) => setRotationSpeed(parseFloat(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Clipping Controls */}
+            <div className="bg-white rounded-lg shadow-lg p-4">
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <Sliders className="w-4 h-4" />
+                Cắt lát mô hình
+              </h3>
+              <div className="space-y-4">
+                {[
+                  { axis: 'X', value: clipX, setter: setClipX, color: 'text-red-500' },
+                  { axis: 'Y', value: clipY, setter: setClipY, color: 'text-green-500' },
+                  { axis: 'Z', value: clipZ, setter: setClipZ, color: 'text-blue-500' }
+                ].map(({ axis, value, setter, color }) => (
+                  <div key={axis} className="p-3 rounded-lg bg-gray-50">
+                    <label className={`block text-sm mb-2 ${color} font-semibold`}>
+                      Trục {axis}: <span className="font-mono">{value.toFixed(1)}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={-10}
+                      max={10}
+                      step={0.1}
+                      value={value}
+                      onChange={(e) => setter(parseFloat(e.target.value))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                ))}
+                
+                {(clipX !== 0 || clipY !== 0 || clipZ !== 0) && (
+                  <button
+                    onClick={() => {
+                      setClipX(0);
+                      setClipY(0);
+                      setClipZ(0);
+                    }}
+                    className="w-full py-2 px-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors"
+                  >
+                    Xóa tất cả cắt lát
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 className="font-semibold mb-2 flex items-center gap-2">
+                <Info className="w-4 h-4" />
+                Hướng dẫn sử dụng
+              </h3>
+              <div className="text-sm space-y-1 opacity-80">
+                <p>• <strong>Kéo chuột:</strong> Xoay mô hình</p>
+                <p>• <strong>Cuộn chuột:</strong> Zoom in/out</p>
+                <p>• <strong>Chuột phải:</strong> Pan (di chuyển)</p>
+                <p>• <strong>Click mô hình:</strong> Fit to screen</p>
+                <p>• <strong>Cắt lát:</strong> Xem bên trong mô hình</p>
+              </div>
+            </div>
+
+          </div>
 
           {/* 3D Viewer */}
           <div className="flex-1">
-            <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg p-4 h-full ${isFullscreen ? 'h-screen' : 'h-[600px]'}`}>
-              <div className="h-full w-full rounded-lg overflow-hidden">
+            <div className="bg-white rounded-xl shadow-lg p-4 h-[700px]">
+              <div className="h-full w-full rounded-lg overflow-hidden relative">
                 <ErrorBoundary>
                   <Canvas
                     shadows
@@ -545,10 +557,12 @@ export default function ThreeDViewer() {
                     gl={{ 
                       localClippingEnabled: true,
                       antialias: true,
-                      alpha: true 
+                      alpha: true,
+                      powerPreference: "high-performance"
                     }}
+                    dpr={[1, 2]}
                   >
-                    <color attach="background" args={[darkMode ? '#1f2937' : '#f9fafb']} />
+                    <color attach="background" args={['#f9fafb']} />
                     
                     <Suspense fallback={<Loading />}>
                       <Environment preset="city" />
@@ -567,8 +581,22 @@ export default function ThreeDViewer() {
                         </CenterAndFit>
                       </Bounds>
                       
-                      {showGrid && <Grid infiniteGrid />}
-                      <ContactShadows opacity={0.5} scale={50} blur={1} far={50} resolution={256} color={darkMode ? "#ffffff" : "#000000"} />
+                      {showGrid && (
+                        <Grid 
+                          infiniteGrid 
+                          fadeDistance={30}
+                          fadeStrength={1}
+                        />
+                      )}
+                      
+                      <ContactShadows 
+                        opacity={0.4} 
+                        scale={50} 
+                        blur={1} 
+                        far={50} 
+                        resolution={256} 
+                        color="#000000"
+                      />
                     </Suspense>
                     
                     <OrbitControls 
@@ -577,11 +605,19 @@ export default function ThreeDViewer() {
                       autoRotateSpeed={rotationSpeed}
                       enableDamping={true}
                       dampingFactor={0.05}
+                      minDistance={1}
+                      maxDistance={50}
+                      maxPolarAngle={Math.PI}
                     />
-                    
-                    {showStats && <Stats />}
                   </Canvas>
                 </ErrorBoundary>
+                
+                {/* Performance indicator */}
+                <div className="absolute top-2 right-2">
+                  <div className="px-2 py-1 rounded text-xs bg-white/80 text-gray-600">
+                    {fileName ? `Loaded: ${fileName}` : "Demo Model"}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
