@@ -6,7 +6,7 @@ import os
 
 router = APIRouter(prefix="/ml", tags=["Machine Learning"])
 
-MODEL_PATH = "app/ml/heart_model.pkl"
+MODEL_PATH = "app/ml/xgboost_model.pkl"
 model = joblib.load(MODEL_PATH)
 
 class HeartInput(BaseModel):
