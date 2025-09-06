@@ -1,16 +1,47 @@
 import React, { useEffect, useMemo, useState, Suspense } from "react";
-import { Canvas, useFrame, useThree, useLoader } from "@react-three/fiber";
+import { Canvas, useLoader } from "@react-three/fiber";
 import {
   OrbitControls,
   Environment,
   Html,
   Bounds,
-  useBounds,
 } from "@react-three/drei";
 import { GLTFLoader } from "three-stdlib";
 import { OBJLoader } from "three-stdlib";
 import { STLLoader } from "three-stdlib";
 import * as THREE from "three";
+
+// ----------------------
+// Error Boundary
+// ----------------------
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; errorMsg: string }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, errorMsg: "" };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, errorMsg: error.message || "Model load error" };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("3D Viewer Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-4 bg-red-50 text-red-600 rounded-lg">
+          ❌ Không thể load mô hình: {this.state.errorMsg}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ----------------------
 // Helpers
@@ -24,14 +55,6 @@ function useObjectURL(file: File | null) {
     return () => URL.revokeObjectURL(u);
   }, [file]);
   return url;
-}
-
-function CenterAndFit({ children }: { children: React.ReactNode }) {
-  const api = useBounds();
-  useEffect(() => {
-    setTimeout(() => api.fit(), 0);
-  }, [api]);
-  return <group>{children}</group>;
 }
 
 function Loading() {
@@ -108,68 +131,6 @@ function Lights() {
   );
 }
 
-function AutoRotate({ enabled }: { enabled: boolean }) {
-  const { camera } = useThree();
-  useFrame((_, delta) => {
-    if (enabled) {
-      camera.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), delta * 0.2);
-    }
-  });
-  return null;
-}
-
-// ----------------------
-// Measurement helper
-// ----------------------
-function MeasurementTool({ enabled }: { enabled: boolean }) {
-  const [points, setPoints] = useState<THREE.Vector3[]>([]);
-  const [distance, setDistance] = useState<number | null>(null);
-
-  const handleClick = (e: any) => {
-    if (!enabled) return;
-    e.stopPropagation();
-    const p = e.point.clone();
-    setPoints((prev) => {
-      const newPoints = [...prev, p];
-      if (newPoints.length === 2) {
-        const d = newPoints[0].distanceTo(newPoints[1]);
-        setDistance(d);
-      }
-      return newPoints.slice(-2);
-    });
-  };
-
-  return (
-    <group onClick={handleClick}>
-      {points.map((p, i) => (
-        <mesh key={i} position={p}>
-          <sphereGeometry args={[0.05, 16, 16]} />
-          <meshBasicMaterial color="red" />
-        </mesh>
-      ))}
-      {points.length === 2 && (
-        <>
-          <line>
-            <bufferGeometry
-              attach="geometry"
-              setFromPoints={new THREE.BufferGeometry().setFromPoints(points)}
-            />
-            <lineBasicMaterial color="red" />
-          </line>
-          {distance && (
-            <Html center position={points[1]}>
-              <div className="px-2 py-1 bg-white text-xs rounded shadow">
-                {distance.toFixed(2)} mm
-              </div>
-            </Html>
-          )}
-        </>
-      )}
-    </group>
-  );
-}
-
-
 // ----------------------
 // Main Component
 // ----------------------
@@ -178,8 +139,6 @@ export default function ThreeDViewer() {
   const [wireframe, setWireframe] = useState<boolean>(false);
   const [autoRotate, setAutoRotate] = useState<boolean>(false);
   const [bg, setBg] = useState<string>("#f8fafc");
-  const [clipping, setClipping] = useState<boolean>(false);
-  const [measure, setMeasure] = useState<boolean>(false);
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
@@ -192,10 +151,9 @@ export default function ThreeDViewer() {
     [file]
   );
 
-  // Define a clipping plane (Y axis for example)
   const clippingPlanes = useMemo(
-    () => (clipping ? [new THREE.Plane(new THREE.Vector3(0, -1, 0), 0)] : []),
-    [clipping]
+    () => [new THREE.Plane(new THREE.Vector3(0, -1, 0), 0)],
+    []
   );
 
   return (
@@ -224,20 +182,6 @@ export default function ThreeDViewer() {
           >
             {autoRotate ? "Dừng xoay" : "Tự xoay"}
           </button>
-          <button
-            onClick={() => setClipping((v) => !v)}
-            className="px-3 py-2 rounded-xl border hover:shadow"
-          >
-            {clipping ? "Tắt cắt lớp" : "Cắt lớp"}
-          </button>
-          <button
-            onClick={() => setMeasure((v) => !v)}
-            className={`px-3 py-2 rounded-xl border hover:shadow ${
-              measure ? "bg-blue-100" : ""
-            }`}
-          >
-            {measure ? "Thoát đo" : "Đo khoảng cách"}
-          </button>
           <select
             className="px-3 py-2 rounded-xl border"
             value={bg}
@@ -254,33 +198,29 @@ export default function ThreeDViewer() {
 
       <p className="text-gray-600 -mt-2">
         Tải mô hình siêu âm/CT/MRI đã được chuyển sang lưới 3D (STL/OBJ/GLTF).
-        Có thể cắt lớp, đo khoảng cách để hỗ trợ phân tích chỉ số tim mạch.
       </p>
 
       <div
         className="relative w-full aspect-square rounded-2xl overflow-hidden border"
         style={{ background: bg }}
       >
-        <Canvas shadows camera={{ position: [4, 4, 6], fov: 45 }}>
-          <Suspense fallback={<Loading />}>
-            <Environment preset="city" />
-            <Lights />
-            <Bounds clip fit observe margin={1.2}>
-              <CenterAndFit>
+        <ErrorBoundary>
+          <Canvas shadows camera={{ position: [4, 4, 6], fov: 45 }}>
+            <Suspense fallback={<Loading />}>
+              <Environment preset="city" />
+              <Lights />
+              <Bounds clip fit observe margin={1.2}>
                 <Model
                   url={url}
                   ext={ext}
                   wireframe={wireframe}
                   clippingPlanes={clippingPlanes}
                 />
-              </CenterAndFit>
-            </Bounds>
-            <MeasurementTool enabled={measure} />
-          </Suspense>
-          <gridHelper args={[20, 20]} />
-          <OrbitControls makeDefault />
-          <AutoRotate enabled={autoRotate} />
-        </Canvas>
+              </Bounds>
+            </Suspense>
+            <OrbitControls makeDefault autoRotate={autoRotate} />
+          </Canvas>
+        </ErrorBoundary>
       </div>
 
       <div className="text-xs text-gray-500">
@@ -291,6 +231,3 @@ export default function ThreeDViewer() {
     </div>
   );
 }
-
-
-
