@@ -5,6 +5,10 @@ import joblib, numpy as np, os
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+# --- SHAP imports ---
+import math
+import shap
+from functools import lru_cache
 
 
 router = APIRouter(prefix="/ml", tags=["Machine Learning"])
@@ -34,6 +38,19 @@ try:
     load_model()
 except Exception as e:
     print(f"[WARN] Could not load model at startup: {e}")
+
+@lru_cache(maxsize=1)
+def _get_explainer():
+    if model is None:
+        raise RuntimeError("Model not loaded")
+    clf = model.named_steps.get("clf")
+    return shap.TreeExplainer(clf)  
+
+def _sigmoid(x: float) -> float:
+    try:
+        return 1.0/(1.0+math.exp(-x))
+    except OverflowError:
+        return 0.0 if x < 0 else 1.0
 
 # Thứ tự cột đầu vào THÔ cho preprocessor (đã khớp lúc train)
 BASE_FEATURE_COLUMNS: List[str] = [
@@ -132,6 +149,41 @@ class SimpleInput(BaseModel):
 def feature_names():
     """Thứ tự feature THÔ mà server build gửi vào model (để debug)."""
     return {"feature_order": BASE_FEATURE_COLUMNS}
+
+
+# --- thêm mapping thân thiện cho frontend ---
+HUMAN_LABELS = {
+    "num__age": "Age (days)",
+    "num__height": "Height (cm)",
+    "num__weight": "Weight (kg)",
+    "num__ap_hi": "Systolic BP",
+    "num__ap_lo": "Diastolic BP",
+    "num__age_years": "Age (years)",
+    "num__bmi": "BMI",
+    "num__bp_diff": "BP diff (ap_hi - ap_lo)",
+    "cat__gender_1": "Gender=Female",
+    "cat__gender_2": "Gender=Male",
+    "cat__cholesterol_1": "Cholesterol=1",
+    "cat__cholesterol_2": "Cholesterol=2",
+    "cat__cholesterol_3": "Cholesterol=3",
+    "cat__gluc_1": "Glucose=1",
+    "cat__gluc_2": "Glucose=2",
+    "cat__gluc_3": "Glucose=3",
+    "cat__smoke_0": "Smoke=No",
+    "cat__smoke_1": "Smoke=Yes",
+    "cat__alco_0": "Alcohol=No",
+    "cat__alco_1": "Alcohol=Yes",
+    "cat__active_0": "Active=No",
+    "cat__active_1": "Active=Yes",
+    "cat__gender_bin_0": "GenderBin=0",
+    "cat__gender_bin_1": "GenderBin=1",
+}
+
+@router.get("/feature_labels")
+def feature_labels():
+    """Mapping tên cột -> label thân thiện (cho FE)"""
+    return HUMAN_LABELS
+
 
 @router.get("/model_info")
 def model_info():
@@ -249,6 +301,7 @@ async def reload_model(file: UploadFile = File(...)):
         with open(MODEL_PATH,"wb") as f:
             f.write(await file.read())
         load_model(MODEL_PATH)
+        _get_explainer.cache_clear()
         return {"message":"Model reloaded successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Reload failed: {e}")
@@ -279,3 +332,66 @@ def versions():
     import sklearn, xgboost, sys
     return {"python": sys.version, "sklearn": sklearn.__version__, "xgboost": xgboost.__version__}
 
+@router.post("/explain_full")
+def explain_full(payload: CardioFullInput, top_k: int = 6):
+    """
+    Trả về giải thích SHAP cho 1 mẫu (class 1 = nguy cơ cao):
+    - base_value (logit), base_prob (sigmoid)
+    - prob dự đoán
+    - danh sách đóng góp theo feature (name, shap_value)
+    - top_up (đẩy tăng rủi ro), top_down (giảm rủi ro)
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    # 1) build raw features
+    X_raw = build_feature_df(
+        age_days=payload.age, height=payload.height, weight=payload.weight,
+        ap_hi=payload.ap_hi, ap_lo=payload.ap_lo,
+        cholesterol=payload.cholesterol, gluc=payload.gluc,
+        smoke=payload.smoke, alco=payload.alco, active=payload.active,
+        gender=payload.gender,
+    )
+
+    # 2) preprocess -> matrix
+    pre = model.named_steps["pre"]
+    X_trans = pre.transform(X_raw)
+    feat_names = list(map(str, pre.get_feature_names_out()))
+
+    # 3) prediction
+    y = model.predict(X_raw)
+    prob = None
+    if hasattr(model, "predict_proba"):
+        prob = float(model.predict_proba(X_raw)[0,1])
+
+    # 4) SHAP
+    explainer = _get_explainer()
+    # Với XGBoostClassifier, explainer.expected_value có thể là mảng 2 classes; lấy class 1
+    shap_values = explainer.shap_values(X_trans)
+    expected_value = explainer.expected_value
+    # chuẩn hoá về class-1 dạng số
+    if isinstance(shap_values, list):  # đôi khi trả list theo class
+        shap_row = shap_values[1][0]
+        if isinstance(expected_value, (list, tuple, np.ndarray)):
+            expected_value = float(expected_value[1])
+    else:
+        shap_row = shap_values[0]
+
+    # 5) đóng gói kết quả
+    contrib = [{"feature": feat_names[i], "value": float(shap_row[i])}
+               for i in range(len(feat_names))]
+    contrib_sorted = sorted(contrib, key=lambda x: abs(x["value"]), reverse=True)
+
+    up   = [c for c in contrib_sorted if c["value"] > 0][:top_k]   # đẩy tăng rủi ro
+    down = [c for c in contrib_sorted if c["value"] < 0][:top_k]   # đẩy giảm rủi ro
+
+    return {
+        "prediction": int(y[0]),
+        "prob": prob,
+        "base_value": float(expected_value),           # logit base
+        "base_prob":  _sigmoid(float(expected_value)), # prob nền
+        "top_up":   up,
+        "top_down": down,
+        "contributions": contrib_sorted,               # đầy đủ (để vẽ biểu đồ client)
+        "note": "SHAP > 0: tăng xác suất class=1 (nguy cơ cao); SHAP < 0: giảm."
+    }
