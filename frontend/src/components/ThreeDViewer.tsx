@@ -1,19 +1,18 @@
-import React, { useEffect, useMemo, useState, Suspense } from "react";
+import React, { useState, Suspense, useEffect } from "react";
 import { Canvas, useLoader } from "@react-three/fiber";
 import {
   OrbitControls,
   Environment,
-  Html,
   Bounds,
+  useBounds,
+  Html,
 } from "@react-three/drei";
-import { GLTFLoader } from "three-stdlib";
-import { OBJLoader } from "three-stdlib";
-import { STLLoader } from "three-stdlib";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 
-// ----------------------
-// Error Boundary
-// ----------------------
+// ================== ErrorBoundary ==================
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; errorMsg: string }
@@ -43,39 +42,48 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// ----------------------
-// Helpers
-// ----------------------
-function useObjectURL(file: File | null) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!file) return;
-    const u = URL.createObjectURL(file);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [file]);
-  return url;
-}
-
+// ================== Loading Component ==================
 function Loading() {
   return (
     <Html center>
-      <div className="px-3 py-1 text-sm bg-white/90 rounded-lg shadow">
-        Đang tải mô hình…
+      <div className="px-4 py-2 bg-white rounded shadow text-gray-600">
+        Đang tải mô hình...
       </div>
     </Html>
   );
 }
 
+// ================== Lights ==================
+function Lights() {
+  return (
+    <>
+      <ambientLight intensity={0.5} />
+      <directionalLight
+        position={[10, 10, 5]}
+        intensity={1}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+      />
+    </>
+  );
+}
+
+// ================== Fallback Cube ==================
 function FallbackCube({ wireframe }: { wireframe: boolean }) {
   return (
     <mesh castShadow receiveShadow>
-      <boxGeometry args={[2, 2, 2]} />
-      <meshStandardMaterial wireframe={wireframe} />
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial
+        color="orange"
+        wireframe={wireframe}
+        clippingPlanes={[]}
+      />
     </mesh>
   );
 }
 
+// ================== Model Loader ==================
 function Model({
   url,
   ext,
@@ -91,13 +99,20 @@ function Model({
 
   if (ext === "gltf" || ext === "glb") {
     const gltf = useLoader(GLTFLoader, url);
-    return (
-      <primitive
-        object={gltf.scene}
-        material-clippingPlanes={clippingPlanes}
-        material-clipShadows
-      />
-    );
+
+    useEffect(() => {
+      gltf.scene.traverse((child: any) => {
+        if (child.isMesh) {
+          if (child.material) {
+            child.material.clippingPlanes = clippingPlanes;
+            child.material.clipShadows = true;
+            child.material.wireframe = wireframe;
+          }
+        }
+      });
+    }, [gltf, clippingPlanes, wireframe]);
+
+    return <primitive object={gltf.scene} />;
   }
 
   if (ext === "obj") {
@@ -121,112 +136,91 @@ function Model({
   return <FallbackCube wireframe={wireframe} />;
 }
 
-function Lights() {
+// ================== CenterAndFit ==================
+function CenterAndFit({ children }: { children: React.ReactNode }) {
+  const api = useBounds();
   return (
-    <>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[5, 10, 5]} intensity={1.0} castShadow />
-      <directionalLight position={[-5, -5, -5]} intensity={0.4} />
-    </>
+    <group
+      onClick={(e) => {
+        e.stopPropagation();
+        api.refresh(e.object).fit();
+      }}
+      onPointerMissed={(e) => {
+        if (e.type === "click") api.refresh().fit();
+      }}
+    >
+      {children}
+    </group>
   );
 }
 
-// ----------------------
-// Main Component
-// ----------------------
+// ================== Main Viewer ==================
 export default function ThreeDViewer() {
-  const [file, setFile] = useState<File | null>(null);
-  const [wireframe, setWireframe] = useState<boolean>(false);
-  const [autoRotate, setAutoRotate] = useState<boolean>(false);
-  const [bg, setBg] = useState<string>("#f8fafc");
+  const [url, setUrl] = useState<string | null>(null);
+  const [ext, setExt] = useState<string | null>(null);
+  const [wireframe, setWireframe] = useState(false);
+  const [autoRotate, setAutoRotate] = useState(false);
 
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] || null;
-    if (f) setFile(f);
+  // Clipping planes
+  const [clippingPlanes, setClippingPlanes] = useState<THREE.Plane[]>([]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fileExt = file.name.split(".").pop()?.toLowerCase();
+    if (!fileExt) return;
+
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    setExt(fileExt);
   };
 
-  const url = useObjectURL(file);
-  const ext = useMemo(
-    () => (file ? file.name.split(".").pop()?.toLowerCase() || null : null),
-    [file]
-  );
-
-  const clippingPlanes = useMemo(
-    () => [new THREE.Plane(new THREE.Vector3(0, -1, 0), 0)],
-    []
-  );
-
   return (
-    <div className="bg-white p-6 rounded-2xl shadow h-full flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">3D Reconstruction</h2>
-        <div className="flex items-center gap-2 flex-wrap">
-          <label className="px-3 py-2 rounded-xl border cursor-pointer hover:shadow transition">
-            <input
-              type="file"
-              accept=".glb,.gltf,.obj,.stl"
-              className="hidden"
-              onChange={onFileChange}
-            />
-            Tải mô hình (.glb/.gltf/.obj/.stl)
-          </label>
-          <button
-            onClick={() => setWireframe((v) => !v)}
-            className="px-3 py-2 rounded-xl border hover:shadow"
-          >
-            {wireframe ? "Tắt wireframe" : "Bật wireframe"}
-          </button>
-          <button
-            onClick={() => setAutoRotate((v) => !v)}
-            className="px-3 py-2 rounded-xl border hover:shadow"
-          >
-            {autoRotate ? "Dừng xoay" : "Tự xoay"}
-          </button>
-          <select
-            className="px-3 py-2 rounded-xl border"
-            value={bg}
-            onChange={(e) => setBg(e.target.value)}
-            title="Nền"
-          >
-            <option value="#ffffff">Trắng</option>
-            <option value="#f8fafc">Rất nhạt</option>
-            <option value="#e2e8f0">Nhạt</option>
-            <option value="#0b1020">Tối</option>
-          </select>
-        </div>
+    <div className="bg-white p-6 rounded-lg shadow h-full flex flex-col">
+      <h2 className="text-2xl font-bold mb-4">3D Reconstruction Viewer</h2>
+
+      <div className="flex items-center gap-4 mb-4">
+        <input
+          type="file"
+          accept=".glb,.gltf,.obj,.stl"
+          onChange={handleFileUpload}
+        />
+        <button
+          className="px-3 py-1 bg-blue-500 text-white rounded"
+          onClick={() => setWireframe((w) => !w)}
+        >
+          {wireframe ? "Tắt Wireframe" : "Bật Wireframe"}
+        </button>
+        <button
+          className="px-3 py-1 bg-green-500 text-white rounded"
+          onClick={() => setAutoRotate((r) => !r)}
+        >
+          {autoRotate ? "Tắt Auto-Rotate" : "Bật Auto-Rotate"}
+        </button>
       </div>
 
-      <p className="text-gray-600 -mt-2">
-        Tải mô hình siêu âm/CT/MRI đã được chuyển sang lưới 3D (STL/OBJ/GLTF).
-      </p>
-
-      <div
-        className="relative w-full aspect-square rounded-2xl overflow-hidden border"
-        style={{ background: bg }}
-      >
+      <div className="flex-1">
         <ErrorBoundary>
           <Canvas shadows camera={{ position: [4, 4, 6], fov: 45 }}>
             <Suspense fallback={<Loading />}>
               <Environment preset="city" />
               <Lights />
               <Bounds clip fit observe margin={1.2}>
-                <Model
-                  url={url}
-                  ext={ext}
-                  wireframe={wireframe}
-                  clippingPlanes={clippingPlanes}
-                />
+                <CenterAndFit>
+                  <Model
+                    url={url}
+                    ext={ext}
+                    wireframe={wireframe}
+                    clippingPlanes={clippingPlanes}
+                  />
+                </CenterAndFit>
               </Bounds>
             </Suspense>
+            <gridHelper args={[20, 20]} />
             <OrbitControls makeDefault autoRotate={autoRotate} />
           </Canvas>
         </ErrorBoundary>
-      </div>
-
-      <div className="text-xs text-gray-500">
-        Gợi ý: Dùng <span className="font-mono">3D Slicer</span> hoặc{" "}
-        <span className="font-mono">ITK-Snap</span> để trích lưới STL/OBJ từ
-        DICOM trước khi tải lên.
       </div>
     </div>
   );
