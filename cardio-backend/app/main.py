@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import init_db
 from app.api import auth, users
+from app.api import chatbot_router
 from app.routers import iot_router
 from app.routers import ml as ml_router
 from app.core.config import settings
@@ -30,3 +31,4 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(iot_router.router)
 app.include_router(ml_router.router)    
+app.include_router(chatbot_router.router, prefix="/api")
